@@ -1,28 +1,76 @@
 <?php
-	// sgal - Simple Galery
+	// sgal - Simple Galery v1.0
 	// made by Gergo Koos
 	// http://koosgergo.info
 	// gergo@koosgergo.info
+	// https://github.com/gergokoos/sgal
 	// licensed under Creative Commons Attribution-NonCommercial 3.0 Unported License with an addition of: if you modificate the program, you have to share with me
 	//http://creativecommons.org/licenses/by-nc/3.0/
 	
 	
 	//-------- SETTINGS ----------
 	
-	$filetypes = array('jpg'); // currently only jpg files
+	$filetypes = array('jpg','png'); // only jpg, png files
 	$thumbnailsize = '200'; // longer side in pixels, if you change this, you have to delete manually the already existing thumbnails (files starting with _)
 	$margin = '50'; // in px;
+	$password = ''; // leave it empty if you don't want to use password
+	$enableSelfDownload = true; // enable if you let other users download this script from your site. the passsword will be blanked out
+	$jquery = 'http://code.jquery.com/jquery-latest.min.js'; // jQuery will be linked from here
 	
 	//----- END OF SETTINGS ------
 	
-	if ( !isset($_GET['t'])) $_GET['t'] = NULL;
 	
-	if ( $_GET['t'] != NULL ) {
+	//----- DON'T CHANGE AFTER THIS POINT, UNLESS YOU KNOW WHAT YOU DO! ------
+	session_start();
+
+	// handling login
+	if ( !isset($_SESSION['sgallogin']) ) $_SESSION['sgallogin'] = false;
+	if ( isset($_POST['password']) ) {
+		if ( $_POST['password'] == $password ) $_SESSION['sgallogin'] = true;
+		else $_SESSION['sgallogin'] = false;
+	}
+	
+	$showhtml = false;
+	if ( !isset($_GET['t'])) $_GET['t'] = NULL;
+	if ( !isset($_GET['d'])) $_GET['d'] = NULL;
+	
+	if ($_GET['d']=='yes' && $enableSelfDownload) {
+		$file = fopen(__FILE__,'r');
+		$content = fread($file, filesize(__FILE__));
+		fclose($file);
+		//preventing cache
+		header("Expires: Mon, 26 Jul 1997 05:00:00 GMT");
+		header("Cache-Control: no-cache");
+		header("Pragma: no-cache");
+		
+		//setting the filename and the size
+		header("Content-Disposition:attachment;filename=sgal.php");
+		header('Content-Length: '.filesize(__FILE__));
+		header('Content-Type: application/x-httpd-php-source');
+		echo preg_replace('/\$password = (.*);/', '$password = \'\';', $content);  
+	}
+	else if ( $_GET['t'] != NULL ) {
 		$pic = str_replace('/', '', $_GET['t']);
 		$pic = str_replace('\'', '', $pic);
+		$ext = explode('.',$pic);
+		$ext = strtolower($ext[count($ext)-1]);
+		
 				
 		if (file_exists('_'.$pic)) {
-			header('Content-Type: image/jpeg');
+			switch($ext) {
+				case 'jpg':
+					header('Content-Type: image/jpeg');
+				break;
+				
+				case 'png':
+					header('Content-Type: image/png');
+				break;
+				
+				default:
+					header('Content-Type: image/'.$ext);
+				break;
+			}
+			
 			die(readfile('_'.$pic));
 		}
 		else if ( file_exists($pic)) {
@@ -42,19 +90,47 @@
 			
 			// Resample
 			$thumb = imagecreatetruecolor($width, $height);
-			$image = imagecreatefromjpeg($pic);
+		
+			switch($ext) {
+				case 'jpg':
+					$image = imagecreatefromjpeg($pic);
+				break;
+				
+				case 'png':
+					$image = imagecreatefrompng($pic);
+				break;
+			}
 			imagecopyresampled($thumb, $image, 0, 0, 0, 0, $width, $height, $origx, $origy);
 			
 			// Output
 			if (is_writable(getcwd())) {
-				imagejpeg($thumb,'_'.$pic,80);
-				header('Content-Type: image/jpeg');
+				
+				switch($ext) {
+					case 'jpg':
+						imagejpeg($thumb,'_'.$pic,80);
+						header('Content-Type: image/jpeg');
+					break;
+					
+					case 'png':
+						imagepng($thumb,'_'.$pic);
+						header('Content-Type: image/png');
+					break;
+				}
+			
 				readfile('_'.$pic);
 			}
 			else {
-				header('Content-Type: image/jpeg');
-				imagejpeg($thumb);
-				
+				switch($ext) {
+					case 'jpg':
+						header('Content-Type: image/jpeg');
+						imagejpeg($thumb);
+					break;
+					
+					case 'png':
+						header('Content-Type: image/png');
+						imagepng($thumb);
+					break;
+				}				
 			}
 			imagedestroy($image);
 			imagedestroy($thumb);
@@ -87,13 +163,18 @@
 <html>
 <head>
 	<title>Gallery</title>
-	<meta charset="utf-8" />
-	<script src="http://code.jquery.com/jquery-latest.min.js" type="text/javascript"></script>
+	<meta name="author" content="Gergo Koos, http://koosgergo.info" />
+	<meta name="description" content="A simple single-file gallery using PHP, jQuery, Javascript | https://github.com/gergokoos/sgal" />
+	<meta name="application-name" content="sgal" />
+	
+	<meta charset="utf-8" />	
+	<script src="<?php echo $jquery; ?>" type="text/javascript"></script>
 	<script type="text/javascript">
 		//<![CDATA[
-
-			var images = JSON.parse('<?php echo json_encode($pictures); ?>'),
-				imglist = JSON.parse('<?php echo json_encode($piclist); ?>');
+			<?php if ( strlen($password) == 0 or $_SESSION['sgallogin'] ): ?>
+				var images = JSON.parse('<?php echo json_encode($pictures); ?>'),
+					imglist = JSON.parse('<?php echo json_encode($piclist); ?>');
+			<?php endif; ?>
 			
 			var margin = <?php echo $margin; ?>,
 				vportWidth = 0,
@@ -214,7 +295,7 @@
 			
 		//]]>
 	</script>
-	<style>
+	<style type="text/css">
 		body {
 			background-color: rgba(0,0,0,0.8);
 			
@@ -304,37 +385,56 @@
 		
 		#closeimg {
 			position: absolute;
-			height: 32px;
-			right: -18px;
-			top: -18px;
+			right: 0px;
+			top: 0px;
 			font-size: 40px;
 			color: white;
 			font-family: helvetica;
-			border: 4px solid white;
-			border-radius: 50px;
-			box-shadow: 2px 2px 5px #000000;
+			text-shadow: 2px 2px 5px #000000;
 			cursor: pointer;
 		}
 		
-		#noimg {
+		#notice {
 			color: #dddddd;
 			font-size: 40px;
 			font-family: helvetica;
 			margin-top: 100px;
 		}
+		#footer {
+			position: fixed;
+			bottom: 0px;
+			right: 0px;
+			background-color: #dddddd;
+			border-top: 1px solid white;
+			border-left: 1px solid white;
+			padding: 5px;
+			font-family: helvetica;
+			font-size: 12px;
+		}
+
 	</style>
 	
 </head>
 <body>
 
 <div id="container">
-	
-	<?php if ( count($pictures) > 0 ) : for ($i=0;$i<count($pictures);$i++) :?>
-		<span class="thumbnail" id="<?php echo $i; ?>" data-file="<?php echo $pictures[$i]['file']; ?>" data-width="<?php echo $pictures[$i]['width']; ?>" data-height="<?php echo $pictures[$i]['height']; ?>" ><img src="<?php echo $_SERVER['PHP_SELF'].'?t='.$pictures[$i]['file']; ?>" alt=""/></span>
-		<?php endfor; ?>
-	
-	<?php else:	?>
-	<div id="noimg">No photos in this folder:-(</div>
+	<?php if ( strlen($password) > 0 and !$_SESSION['sgallogin'] ): ?>
+		<div id="notice">
+			Password protected gallery<br />
+			<form name="login" method="post" action="<?php echo $_SERVER['PHP_SELF']; ?>">
+			<input type="password" name="password" />
+			<button type="submit" name="submit">Login</button>
+			</form>
+			
+		</div>
+	<?php else: ?>
+		<?php if ( count($pictures) > 0 ) : for ($i=0;$i<count($pictures);$i++) :?>
+			<span class="thumbnail" id="<?php echo $i; ?>" data-file="<?php echo $pictures[$i]['file']; ?>" data-width="<?php echo $pictures[$i]['width']; ?>" data-height="<?php echo $pictures[$i]['height']; ?>" ><img src="<?php echo $_SERVER['PHP_SELF'].'?t='.$pictures[$i]['file']; ?>" alt=""/></span>
+			<?php endfor; ?>
+		
+		<?php else:	?>
+		<div id="notice">No photos in this folder:-(</div>
+		<?php endif; ?>
 	<?php endif; ?>
 </div>
 
@@ -345,7 +445,11 @@
 	<span id="closeimg">X</span>
 	<div id="boxcontent">&nbsp;</div>
 </div>
-
+<?php if ($enableSelfDownload) : ?>
+<div id="footer">
+	<a href="?d=yes">download sgal gallery</a>
+</div>
+<?php endif; ?>
 </body>
 </html>
 <?php endif; ?>
