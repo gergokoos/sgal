@@ -1,9 +1,16 @@
 <?php
-	//made by Gergo Koos
-	//licensed under Creative Commons Attribution-NonCommercial 3.0 Unported License.
+	// sgal - Simple Galery
+	// made by Gergo Koos
+	// licensed under Creative Commons Attribution-NonCommercial 3.0 Unported License.
+	
+	
+	//-------- SETTINGS ----------
 	
 	$filetypes = array('jpg', 'png');
 	$thumbnailsize = '200'; // longer side in pixels, if you change this, you have to delete manually the already existing thumbnails (files starting with _)
+	$margin = '50'; // in px;
+	
+	//----- END OF SETTINGS ------
 	
 	if ( !isset($_GET['t'])) $_GET['t'] = NULL;
 	
@@ -60,12 +67,14 @@
 		            $pictures[] = array('file' => $file,
 		            					'width' => $width,
 		            					'height' => $height);
+		            $piclist[] = $file;
 
 	            }
 	        }
 	        closedir($handle);
 	    }
 	    sort($pictures);
+	    sort($piclist);
 	    $showhtml = true;
 	}
 	
@@ -76,13 +85,15 @@
 <html>
 <head>
 	<title>Gallery</title>
+	<meta charset="utf-8" />
 	<script src="http://code.jquery.com/jquery-latest.min.js" type="text/javascript"></script>
 	<script type="text/javascript">
 		//<![CDATA[
 
-			var images = JSON.parse('<?php echo json_encode($pictures); ?>');
+			var images = JSON.parse('<?php echo json_encode($pictures); ?>'),
+				imglist = JSON.parse('<?php echo json_encode($piclist); ?>');
 			
-			var margin = 50,
+			var margin = <?php echo $margin; ?>,
 				vportWidth = 0,
 				vportHeight = 0,
 				imgWidth = 0,
@@ -96,62 +107,18 @@
 				
 				$('#overlay').css('height',	vportHeight+'px'); // setting up the overlay height, width is static
 				
-				
-				
-				
-				
-				
-				
-				/*$("#bigpic").one('load', function() {
-					imgWidth = $(this).width();
-					imgHeight = $(this).height();
-					imgRatio = imgWidth/imgHeight;
-					alert ('img: '+imgWidth+'x'+imgHeight+' | ratio: '+imgRatio);
-				}).each(function() {
-					if(this.complete) $(this).load();
-				});
-				*/
-				
 			
 				$('#overlay').click(function() {
 					$("#overlay").hide();
 					$("#wrapper").hide();
 				});
-				
-				
-			
 			
 				$('.thumbnail').click(function() { 
 					//<img id="bigpic" src="DSCF9106.JPG" />
 					//$("#boxcontent").html('');
-					$("#boxcontent").html('<img id="bigpic" src="'+$(this).attr('id')+'" />');
 					
 					
-					imgWidth = $(this).data('width'),
-					imgHeight = $(this).data('height'),
-					imgRatio = imgWidth/imgHeight;
-					
-					if (imgRatio > 1 ) {
-						//landscape
-						setWrapperSize(vportWidth,imgHeight/imgWidth*vportWidth);
-					}
-					else {
-						//portrait
-						setWrapperSize(imgWidth/imgHeight*vportHeight,vportHeight);
-					}
-					
-					
-					
-					/*$('<img id="bigpic" src="'+$(this).attr('id')+'" />').load(function() {
-						//$("#boxcontent").html('');
-						$(this).appendTo('#boxcontent');
-						imgWidth = $(this).width();
-						imgHeight = $(this).height();
-						imgRatio = imgWidth/imgHeight;
-						//alert ('img: '+imgWidth+'x'+imgHeight+' | ratio: '+imgRatio);
-						$("#wrapper").css('width',imgWidth);
-					})
-					*/
+					openThumb($(this).attr('id'));
 					
 					$("#overlay").show();
 					$("#wrapper").show();
@@ -177,18 +144,20 @@
 					if(event.keyCode == 37) { //left					
 						
 						//alert(jQuery.inArray('DSCF8530.JPG', images));
-						var imgnum = jQuery.inArray($("#bigpic").attr('src'), images)-1;
+						var imgnum = jQuery.inArray($("#bigpic").attr('src'), imglist)-1;
 						if ( imgnum >= 0) {
-							$("#bigcontin").html('<img id="bigpic" src="'+images[imgnum]+'" />');
+							//$("#boxcontent").html('<img id="bigpic" src="'+imglist[imgnum]+'" />');
+							openThumb(imgnum);
 						}
 						
 						
 					}
 					
 					if(event.keyCode == 39) { //right
-						var imgnum = jQuery.inArray($("#bigpic").attr('src'), images)+1;
-						if ( imgnum < images.length) {
-							$("#bigcontin").html('<img id="bigpic" src="'+images[imgnum]+'" />');
+						var imgnum = jQuery.inArray($("#bigpic").attr('src'), imglist)+1;
+						if ( imgnum < imglist.length) {
+							//$("#boxcontent").html('<img id="bigpic" src="'+imglist[imgnum]+'" />');
+							openThumb(imgnum);
 						}
 												
 						
@@ -197,11 +166,33 @@
 			});
 			
 			function setWrapperSize(width,height) {
-				$("#wrapper").css('width',width-margin);
-				$("#wrapper").css('height',height-margin);
+				$("#wrapper").css('width',width); 
+				$("#wrapper").css('height',height);
+
+				$("#wrapper").css('left',(vportWidth/2)-(width/2));
+				$("#wrapper").css('top',(vportHeight/2) - (height/2));
+			}
+			
+			function openThumb(id) {
+			
+				$("#boxcontent").html('<img id="bigpic" src="'+$("#"+id).data('file')+'" />');
 				
-				$("#wrapper").css('left',width - (width-(margin/2)));
-				$("#wrapper").css('top',height - (height-(margin/2)));
+					imgWidth = $("#"+id).data('width'),
+					imgHeight = $("#"+id).data('height'),
+					imgRatio = imgWidth/imgHeight;
+					
+					if (imgRatio > 1 ) {
+						//landscape
+						if (imgHeight > vportHeight ) { //in case the image is taller than the screen
+							setWrapperSize(imgRatio*(vportHeight-margin),(vportHeight-margin));
+						}
+						else setWrapperSize(imgWidth,imgHeight);
+						
+					}
+					else {
+						//portrait
+						setWrapperSize(imgRatio*(vportHeight-margin),(vportHeight-margin));
+					}
 			}
 			
 		//]]>
@@ -305,8 +296,9 @@
 
 <div id="container">
 	<?php for ($i=0;$i<count($pictures);$i++) : ?>
-		<span class="thumbnail" id="<?php echo $pictures[$i]['file']; ?>" data-width="<?php echo $pictures[$i]['width']; ?>" data-height="<?php echo $pictures[$i]['height']; ?>" ><img src="<?php echo $_SERVER['PHP_SELF'].'?t='.$pictures[$i]['file']; ?>" alt=""/></span>
+		<span class="thumbnail" id="<?php echo $i; ?>" data-file="<?php echo $pictures[$i]['file']; ?>" data-width="<?php echo $pictures[$i]['width']; ?>" data-height="<?php echo $pictures[$i]['height']; ?>" ><img src="<?php echo $_SERVER['PHP_SELF'].'?t='.$pictures[$i]['file']; ?>" alt=""/></span>
 	<?php endfor; ?>
+	
 </div>
 
 <div id="overlay"></div>
